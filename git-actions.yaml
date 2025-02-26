@@ -1,0 +1,23 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build Docker image
+      run: docker build -t aws-manager .
+    
+    - name: Test Docker image
+      run: |
+        docker run -d -p 8000:8000 --name test-container aws-manager
+        sleep 5
+        docker ps | grep test-container
