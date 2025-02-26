@@ -5,7 +5,7 @@ class ECSManager:
     def __init__(self):
         self.client = boto3.client(
             'ecs',
-            region_name=os.getenv('AWS_REGION', 'us-east-1')
+            region_name=os.getenv('AWS_REGION', 'eu-north-1')
         )
     
     def list_clusters(self):
