@@ -9,9 +9,10 @@ env:
   ECS_SERVICE: health-aws-deployment-service # set this to your Amazon ECS service name
   ECS_CLUSTER: health-aws-deployment-service # set this to your Amazon ECS cluster name
   ECS_TASK_DEFINITION: .github/workflows/health-aws-task-def.json # set this to the path to your Amazon ECS task definition file
-  CONTAINER_NAME: health-aws-deployment-service # set this to the name of the container in the task definition
+  CONTAINER_NAME: health-aws-deployment-service 
 permissions:
-  contents: read # This is required for actions/checkout@v2
+  contents: read 
+  id-token: write 
 jobs:
   deploy:
     name: Deploy production
@@ -21,19 +22,50 @@ jobs:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v3
-        
+
+      
+      - name: Debug Environment
+        run: |
+          echo "GitHub SHA: ${{ github.sha }}"
+          echo "AWS Region: ${{ env.AWS_REGION }}"
+          echo "ECR Repository: ${{ env.ECR_REPOSITORY }}"
+          echo "Checking for AWS credentials..."
+          if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "AWS_ACCESS_KEY_ID is set"
+          else
+            echo "AWS_ACCESS_KEY_ID is NOT set"
+          fi
+          if [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "AWS_SECRET_ACCESS_KEY is set" 
+          else
+            echo "AWS_SECRET_ACCESS_KEY is NOT set"
+          fi
+
       - name: Configure AWS credentials
         id: configure-aws-credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets. AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-          
+      
+      
+      - name: Verify AWS credentials
+        run: |
+          echo "Verifying AWS identity..."
+          aws sts get-caller-identity
+          echo "Listing ECR repositories..."
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} || echo "Repository doesn't exist yet"
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        
+
+      
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} || aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }}
+
       - name: Build, Push, Tag and Deploy Container to ECR.
         id: build-image
         env:
@@ -43,7 +75,15 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-          
+
+      # Verify ECS cluster and service exist
+      - name: Verify ECS resources
+        run: |
+          echo "Checking ECS cluster..."
+          aws ecs describe-clusters --clusters ${{ env.ECS_CLUSTER }} || aws ecs create-cluster --cluster-name ${{ env.ECS_CLUSTER }}
+          echo "Checking ECS service..."
+          aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }} || echo "Service doesn't exist yet (will be created during deployment)"
+
       - name: Fill in the new image ID in the Amazon ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
@@ -51,7 +91,7 @@ jobs:
           task-definition: ${{ env.ECS_TASK_DEFINITION }}
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
-          
+
       - name: Deploy Amazon ECS task definition
         id: deploy-task
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
