@@ -4,7 +4,7 @@ on:
     branches:
       - "main"
 env:
-  AWS_REGION: us-west-2 # set this to preferred AWS region, e.g. us-west-1
+  AWS_REGION: eu-north-1 # set this to preferred AWS region, e.g. us-west-1
   ECR_REPOSITORY: health-aws-deployment-service # set this to your Amazon ECR repository name
   ECS_SERVICE: health-aws-deployment-service # set this to your Amazon ECS service name
   ECS_CLUSTER: health-aws-deployment-service # set this to your Amazon ECS cluster name
